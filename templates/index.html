@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GitHub Webhook Events</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Recent GitHub Events</h1>
+        <div class="table-responsive">
+            <table class="events-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Author</th>
+                        <th>Branch(es)</th>
+                        <th>Time</th>
+                        <th>Relative</th>
+                    </tr>
+                </thead>
+                <tbody id="events"></tbody>
+            </table>
+            <div id="empty-state" style="display:none;text-align:center;color:#aaa;margin-top:2em;">
+                <p>No events yet. Push or create a PR to see activity here!</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        dayjs.extend(window.dayjs_plugin_relativeTime);
+
+        function getBadge(type) {
+            if (type === "push") return '<span class="badge push">Push</span>';
+            if (type === "pull_request") return '<span class="badge pull_request">PR</span>';
+            if (type === "merge") return '<span class="badge merge">Merge</span>';
+            return '<span class="badge unknown">Other</span>';
+        }
+        function getAvatar(author) {
+            if (!author) return '<span class="avatar">?</span>';
+            return `<span class="avatar">${author[0].toUpperCase()}</span>`;
+        }
+        async function fetchEvents() {
+            const res = await fetch('/events');
+            const data = await res.json();
+            const tbody = document.getElementById('events');
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                document.getElementById('empty-state').style.display = 'block';
+                return;
+            } else {
+                document.getElementById('empty-state').style.display = 'none';
+            }
+            data.forEach(item => {
+                // Try to extract fields from the string using regex
+                const match = item.match(/^(.+?) (pushed|submitted|merged|Unknown event) (.+) on (.+)$/);
+                let author = '', type = '', branches = '', time = '';
+                if (match) {
+                    author = match[1];
+                    type = match[2] === "pushed" ? "push" : (match[2] === "submitted" ? "pull_request" : (match[2] === "merged" ? "merge" : "unknown"));
+                    branches = match[3].replace(/(to|from)/g, '').replace(/"/g, '').trim();
+                    time = match[4];
+                }
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${getBadge(type)}</td>
+                    <td>${getAvatar(author)} ${author}</td>
+                    <td>${branches}</td>
+                    <td>${time}</td>
+                    <td class="timeago"><span class="timeago">${time ? dayjs(time, "DD MMMM YYYY - hh:mm A [UTC]").fromNow() : ""}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        fetchEvents();
+        setInterval(fetchEvents, 15000);
+    </script>
+</body>
+</html>
